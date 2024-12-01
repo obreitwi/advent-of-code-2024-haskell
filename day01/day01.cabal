@@ -68,8 +68,9 @@ executable day01
 
     -- Other library packages from which modules are imported.
     build-depends:    base,
-                      bytestring,
+                      attoparsec,
                       file-embed,
+                      rebase,
                       text
 
     -- Directories containing source files.
