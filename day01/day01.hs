@@ -14,12 +14,17 @@ main :: IO ()
 main = do
   putStr "Part 1: "
   either error (print . part1) $ parseOnly parseInput1 input
+  putStr "Part 2: "
+  either error (print . part2) $ parseOnly parseInput1 input
 
 input :: T.Text
 input = decodeUtf8Lenient $(embedFileRelative "./input")
 
 part1 :: ([Int], [Int]) -> Int
 part1 (left, right) = sum $ map abs $ zipWith (-) (sort left) (sort right)
+
+part2 :: ([Int], [Int]) -> Int
+part2 (left, right) = sum $ map (\l -> l * length (filter (l ==) right)) left
 
 parseInput1 :: Parser ([Int], [Int])
 parseInput1 = do
