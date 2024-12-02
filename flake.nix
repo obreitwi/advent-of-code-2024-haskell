@@ -2,12 +2,6 @@
   description = "Advent of Code 2024 solutions in Haskell.";
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable?shallow=1";
-
-    haumea = {
-      url = "github:nix-community/haumea/v0.2.2";
-      inputs.nixpkgs.follows = "nixpkgs-lib";
-    };
-    nixpkgs-lib.url = "github:nix-community/nixpkgs.lib";
   };
 
   outputs = {nixpkgs, ...}: let
