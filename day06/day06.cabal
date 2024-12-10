@@ -51,7 +51,7 @@ extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
 common warnings
-    ghc-options: -Wall
+    ghc-options: -Wall -O2
 
 executable day06
     -- Import common warning flags.
@@ -71,9 +71,11 @@ executable day06
                       attoparsec,
                       containers,
                       file-embed,
+                      hashable,
                       rebase,
                       split,
-                      text
+                      text,
+                      unordered-containers,
 
     -- Directories containing source files.
     hs-source-dirs:   .

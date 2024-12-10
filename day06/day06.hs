@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
@@ -5,11 +6,13 @@ module Main where
 
 import Data.Attoparsec.Text hiding (take)
 import Data.FileEmbed (embedFileRelative)
-import Data.List.Split (splitOn, splitWhen)
-import Data.Map.Strict qualified as Map
-import Data.Set qualified as Set
+import Data.HashMap.Strict (HashMap)
+import Data.HashMap.Strict qualified as Map
+import Data.HashSet (HashSet)
+import Data.HashSet qualified as Set
 import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8Lenient)
+import GHC.Generics (Generic)
 import Rebase.Prelude hiding (left, matchM, matchS, right, rotate, takeWhile)
 import Prelude ()
 
@@ -33,10 +36,11 @@ input = decodeUtf8Lenient $(embedFileRelative "./input")
 debug :: T.Text
 debug = decodeUtf8Lenient $(embedFileRelative "./debug")
 
-data Direction = DirUp | DirDown | DirLeft | DirRight deriving (Show, Eq, Ord)
+data Direction = DirUp | DirDown | DirLeft | DirRight deriving (Show, Eq, Ord, Generic)
+instance Hashable Direction
 
 type Position = (Int, Int)
-type CharMap = Map Position Char
+type CharMap = HashMap Position Char
 
 parseInput :: Parser CharMap
 parseInput = parseCharSet
@@ -72,7 +76,7 @@ part2 original =
  where
   (start, grid) = extractStartingPos original
 
-  toCheck :: Set Position
+  toCheck :: HashSet Position
   toCheck = Set.map fst . Set.filter (\(p, _) -> p /= start) . fst $ walk grid start DirUp
 
 -- extract starting pos and adjust map
@@ -89,17 +93,17 @@ rotate DirDown = DirLeft
 rotate DirLeft = DirUp
 
 -- returns set of walked tiles and whether or not we left the grid
-walk :: CharMap -> Position -> Direction -> (Set (Position, Direction), Bool)
+walk :: CharMap -> Position -> Direction -> (HashSet (Position, Direction), Bool)
 walk grid start dir = go (Set.singleton (start, dir)) start dir
  where
   lu :: Position -> Maybe Char
   lu = flip Map.lookup grid
 
-  go :: Set (Position, Direction) -> Position -> Direction -> (Set (Position, Direction), Bool)
+  go :: HashSet (Position, Direction) -> Position -> Direction -> (HashSet (Position, Direction), Bool)
   go walked currentPos d
     | isNothing nextChar = (walked, True)
     | nextChar == Just '#' = go walked currentPos (rotate d)
-    | (next, d) `Set.notMember` walked = go (Set.insert (next, d) walked) next d
+    | not $ (next, d) `Set.member` walked = go (Set.insert (next, d) walked) next d
     | (next, d) `Set.member` walked = (walked, False)
     | otherwise = undefined
    where
