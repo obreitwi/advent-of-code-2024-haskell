@@ -26,12 +26,12 @@ main = do
   putStr "part 1: "
   either error (print . part1) $ parseOnly parseInput input
 
-  -- putStr "part 2 (debug, expect 81): "
-  -- -- either error (print . part2) $ parseOnly parseInput debug
-  -- print . part2 $ [125, 17]
+  putStr "part 2 (debug, expect 81): "
+  -- either error (print . part2) $ parseOnly parseInput debug
+  print . part2 $ [125, 17]
 
-  -- putStr "part 2: "
-  -- either error (print . part2) $ parseOnly parseInput input
+  putStr "part 2: "
+  either error (print . part2) $ parseOnly parseInput input
 
 input :: T.Text
 input = decodeUtf8Lenient $(embedFileRelative "./input")
@@ -57,11 +57,22 @@ evolve = concatMap go
     len = length asChar
 
 part1 :: [Stone] -> Int
-part1 = evolveN 25
+part1 = evolveHashN 25
 
 part2 :: [Stone] -> Int
-part2 = evolveN 75
+part2 = evolveHashN 75
 
 evolveN :: Int -> [Stone] -> Int
 evolveN 0 = length
-evolveN n = trace (show n) $ evolve >>> traceWith (show . length) >>> evolveN (n - 1)
+evolveN n =  evolve >>> evolveN (n - 1)
+
+evolveHashN :: Int -> [Stone] -> Int
+evolveHashN numIterations = map (,1) >>> Map.fromList >>> go numIterations
+  where
+    go 0 = Map.foldl' (+) 0
+    go n = Map.toList >>> concatMap evolveWithCount >>> Map.fromListWith (+) >>> go (n-1)
+
+evolveWithCount :: (Stone, Int) -> [(Stone, Int)]
+evolveWithCount (s, c) = evolve [s] & map (, c)
+
+
