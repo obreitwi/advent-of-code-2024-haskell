@@ -11,13 +11,20 @@ import Data.Text qualified as T
 import Data.Text.Encoding (decodeUtf8Lenient)
 import Rebase.Prelude hiding (IntMap, check, left, matchM, matchS, right, rotate, takeWhile)
 import Prelude ()
+import Numeric.LinearAlgebra qualified as LA
+import Numeric.LinearAlgebra.Data qualified as LAD
+import Numeric.LinearAlgebra.Data ((><))
 
 main :: IO ()
 main = do
-  putStr "Part 1 (debug, expect 480): "
-  putStrLn ""
+  putStrLn "Part 1 (debug, expect 480): "
   either error (print . part1) $ parseOnly parseInput debug
   either error (print . part1) $ parseOnly parseInput input
+
+  putStrLn "Part 2 (debug, expect ???): "
+  either error (mapM_ print) $ parseOnly parseInput debug
+  either error (print . part2) $ parseOnly parseInput debug
+  either error (print . part2) $ parseOnly parseInput input
 
 input :: T.Text
 input = decodeUtf8Lenient $(embedFileRelative "./input")
@@ -29,7 +36,11 @@ parseInput :: Parser [Claw]
 parseInput = parseClaw `sepBy1'` many1' endOfLine
 
 part1 :: [Claw] -> Int
-part1 = mapMaybe bruteForce >>> foldl' (+) 0
+-- part1 = mapMaybe bruteForce >>> foldl' (+) 0
+part1 = mapMaybe (dup >>> second solveClaw >>> uncurry checkSolution) >>> foldl' (+) 0
+
+part2 :: [Claw] -> Int
+part2 = mapMaybe (adaptPart2 >>> dup >>> second solveClaw >>> uncurry checkSolution) >>> foldl' (+) 0
 
 data Claw = Claw
   { buttonA :: Button
@@ -42,6 +53,15 @@ data Button = Button {x :: Int, y :: Int}
   deriving (Show, Eq)
 
 type Prize = Button
+
+shiftPart2 :: Int
+shiftPart2 = 10000000000000
+
+adaptPart2 :: Claw -> Claw
+adaptPart2 c =
+  c
+    { prize = Button{x = (prize >>> x) c + shiftPart2, y = (prize >>> y) c + shiftPart2}
+    }
 
 parseClaw :: Parser Claw
 parseClaw = do
@@ -64,10 +84,10 @@ parsePrize = do
 
 bruteForce :: Claw -> Maybe Int
 bruteForce c = foldl' maybeMin Nothing $ mapMaybe (checkSolution c) [0 .. maxTries]
-  where
-    maybeMin :: Maybe Int -> Int -> Maybe Int
-    maybeMin Nothing r = Just r
-    maybeMin (Just l) r = Just $ l `min` r
+ where
+  maybeMin :: Maybe Int -> Int -> Maybe Int
+  maybeMin Nothing r = Just r
+  maybeMin (Just l) r = Just $ l `min` r
 
 maxTries :: Int
 maxTries = 100
@@ -78,8 +98,9 @@ checkSolution c numApplyA = go $ ((prize >>> x) c - (buttonA >>> x) c * numApply
  where
   go :: Int -> Maybe Int
   go neededApplyB
-    | -- trace (printf "A x %d B x %d -> %s" numApplyA neededApplyB (show . applyB $ neededApplyB)) $ 
-      applyB neededApplyB == prize c = Just $ 3 * numApplyA + neededApplyB
+    | -- trace (printf "A x %d B x %d -> %s" numApplyA neededApplyB (show . applyB $ neededApplyB)) $
+      applyB neededApplyB == prize c =
+        Just $ 3 * numApplyA + neededApplyB
     | otherwise = Nothing
 
   applyB :: Int -> Button
@@ -88,3 +109,16 @@ checkSolution c numApplyA = go $ ((prize >>> x) c - (buttonA >>> x) c * numApply
       { x = (buttonA >>> x) c * numApplyA + (buttonB >>> x) c * numApplyB
       , y = (buttonA >>> y) c * numApplyA + (buttonB >>> y) c * numApplyB
       }
+
+dup :: a -> (a, a)
+dup a = (a, a)
+
+solveClaw :: Claw -> Int
+solveClaw c = round $ solution `LA.atIndex` 0
+  where
+    solution = LA.cgSolve False (
+      LA.mkDense $ (2><2) (sequenceA [
+        (buttonA >>> x >>> fromIntegral), (buttonB >>> x >>> fromIntegral),
+        (buttonA >>> y >>> fromIntegral), (buttonB >>> y >>> fromIntegral)
+      ] c)) (fromList $ sequenceA [prize >>> x >>> fromIntegral, prize >>> y >>> fromIntegral] c)
+
