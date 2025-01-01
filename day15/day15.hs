@@ -24,6 +24,12 @@ main = do
   putStr "Part 1: (expect 1318523)"
   either error part1 (parseOnly parseInput input) >>= print
 
+  putStr "Part 2 (debug, expect 9021): "
+  either error part1 (transformPart2 >>> parseOnly parseInput $ debug) >>= print
+
+  putStr "Part 2: "
+  either error part1 (transformPart2 >>> parseOnly parseInput $ input) >>= print
+
 input :: T.Text
 input = decodeUtf8Lenient $(embedFileRelative "./input")
 
@@ -62,7 +68,7 @@ data Instruction = GoUp | GoDown | GoLeft | GoRight deriving (Show, Eq)
 parseInstruction :: Parser Instruction
 parseInstruction = (char '^' $> GoUp) <|> (char 'v' $> GoDown) <|> (char '>' $> GoRight) <|> (char '<' $> GoLeft)
 
-data Kind = Wall | Box | Robot | Free deriving (Show, Eq, Generic)
+data Kind = Wall | Box | BoxLeft | BoxRight | Robot | Free deriving (Show, Eq, Generic)
 instance Hashable Kind
 
 parseGrid :: Parser Input
@@ -74,7 +80,7 @@ parseGrid = do
   return $ Input{inputEntities, instructions}
 
 parseKind :: Parser Kind
-parseKind = (char '#' $> Wall) <|> (char 'O' $> Box) <|> (char '@' $> Robot) <|> (char '.' $> Free)
+parseKind = (char '#' $> Wall) <|> (char 'O' $> Box) <|> (char '@' $> Robot) <|> (char '.' $> Free) <|> (char '[' $> BoxLeft) <|> (char ']' $> BoxRight)
 
 enumerate :: [a] -> [(Int, a)]
 enumerate = go 0
@@ -125,7 +131,6 @@ shiftBoxes targets i = do
   targets & (Set.map (first $ move i) >>> Set.toList >>> mapM_ (\(p, k) -> modifyEntities $ Map.insert p k))
   modify $ \s -> s{current = move i (current s)}
 
-
 -- check if path in given direction is free (True) or blocked (False)
 checkPathFree :: Instruction -> State Grid (HashSet (Position, Kind), Bool)
 checkPathFree i = gets current >>= checkPath i
@@ -138,11 +143,27 @@ checkPath i p = do
     Just Wall -> return (Set.empty, False)
     Just Free -> return (Set.empty, True)
     Just Robot -> checkPath i (move i p) >>= appendIfFree (p, Robot)
+    Just BoxLeft ->
+      if i `elem` [GoLeft, GoRight]
+        then checkPath i (move i p) >>= appendIfFree (p, BoxLeft)
+        else (checkPath i (move i p) `checkBoth` checkPath i (move i (move GoRight p))) >>= appendIfFree (p, BoxLeft) >>= appendIfFree (move GoRight p, BoxRight)
+    Just BoxRight ->
+      if i `elem` [GoLeft, GoRight] -- only check boht if going up/down
+        then checkPath i (move i p) >>= appendIfFree (p, BoxRight)
+        else (checkPath i (move i p) `checkBoth` checkPath i (move i (move GoLeft p))) >>= appendIfFree (move GoLeft p, BoxLeft) >>= appendIfFree (p, BoxRight)
     Nothing -> error "ran out of map"
  where
   appendIfFree :: (Position, Kind) -> (HashSet (Position, Kind), Bool) -> State Grid (HashSet (Position, Kind), Bool)
   appendIfFree _ (_, False) = return (Set.empty, False)
   appendIfFree c (rest, True) = return (Set.insert c rest, True)
+
+  checkBoth :: State Grid (HashSet (Position, Kind), Bool) -> State Grid (HashSet (Position, Kind), Bool) -> State Grid (HashSet (Position, Kind), Bool)
+  checkBoth = liftM2 go
+   where
+    go :: (HashSet (Position, Kind), Bool) -> (HashSet (Position, Kind), Bool) -> (HashSet (Position, Kind), Bool)
+    go (_, False) _ = (Set.empty, False)
+    go _ (_, False) = (Set.empty, False)
+    go (l, True) (r, True) = (l `Set.union` r, True)
 
 robotPosition :: Entities -> Position
 robotPosition = Map.toList >>> filter (snd >>> (== Robot)) >>> head >>> fst
@@ -162,7 +183,9 @@ printEntities e =
   putKind (Just Box) = 'O'
   putKind (Just Robot) = '@'
   putKind (Just Wall) = '#'
+  putKind (Just BoxLeft) = '['
+  putKind (Just BoxRight) = ']'
   putKind Nothing = 'X'
 
 score :: Entities -> Int
-score = Map.filter (== Box) >>> Map.keys >>> map (\(x, y) -> x + 100 * y) >>> sum
+score = Map.filter ((== Box) &&& (== BoxLeft) >>> uncurry (||)) >>> Map.keys >>> map (\(x, y) -> x + 100 * y) >>> sum
