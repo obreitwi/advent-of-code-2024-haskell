@@ -115,33 +115,33 @@ data Grid = Grid
 
 handleInstruction :: Instruction -> State Grid ()
 handleInstruction i = checkPathFree i >>= go
- where
-  go :: (HashSet (Position, Kind), Bool) -> State Grid ()
-  go (_, False) = return ()
-  go (targets, True) = shiftBoxes targets i
+  where
+    go :: Maybe (HashSet (Position, Kind)) -> State Grid ()
+    go Nothing = pure ()
+    go (Just x) = shiftBoxes i x
 
 modifyEntities :: (Entities -> Entities) -> State Grid ()
 modifyEntities f = modify $ \s -> s{entities = s & (entities >>> f)}
 
 -- move all boxes along the path from current position
 -- updates current position of robot
-shiftBoxes :: HashSet (Position, Kind) -> Instruction -> State Grid ()
-shiftBoxes targets i = do
+shiftBoxes :: Instruction -> HashSet (Position, Kind) -> State Grid ()
+shiftBoxes i targets = do
   targets & (Set.map fst >>> Set.toList >>> mapM_ (\p -> modifyEntities $ Map.insert p Free))
   targets & (Set.map (first $ move i) >>> Set.toList >>> mapM_ (\(p, k) -> modifyEntities $ Map.insert p k))
   modify $ \s -> s{current = move i (current s)}
 
 -- check if path in given direction is free (True) or blocked (False)
-checkPathFree :: Instruction -> State Grid (HashSet (Position, Kind), Bool)
+checkPathFree :: Instruction -> State Grid (Maybe (HashSet (Position, Kind)))
 checkPathFree i = gets current >>= checkPath i
 
-checkPath :: Instruction -> Position -> State Grid (HashSet (Position, Kind), Bool)
+checkPath :: Instruction -> Position -> State Grid (Maybe (HashSet (Position, Kind)))
 checkPath i p = do
   k <- gets $ entities >>> Map.lookup p
   case k of
     Just Box -> checkPath i (move i p) >>= appendIfFree (p, Box)
-    Just Wall -> return (Set.empty, False)
-    Just Free -> return (Set.empty, True)
+    Just Wall -> return Nothing
+    Just Free -> return $ Just Set.empty
     Just Robot -> checkPath i (move i p) >>= appendIfFree (p, Robot)
     Just BoxLeft ->
       if i `elem` [GoLeft, GoRight]
@@ -153,17 +153,17 @@ checkPath i p = do
         else (checkPath i (move i p) `checkBoth` checkPath i (move i (move GoLeft p))) >>= appendIfFree (move GoLeft p, BoxLeft) >>= appendIfFree (p, BoxRight)
     Nothing -> error "ran out of map"
  where
-  appendIfFree :: (Position, Kind) -> (HashSet (Position, Kind), Bool) -> State Grid (HashSet (Position, Kind), Bool)
-  appendIfFree _ (_, False) = return (Set.empty, False)
-  appendIfFree c (rest, True) = return (Set.insert c rest, True)
+  appendIfFree :: (Position, Kind) -> Maybe (HashSet (Position, Kind)) -> State Grid (Maybe (HashSet (Position, Kind)))
+  appendIfFree _ Nothing = return Nothing
+  appendIfFree c (Just rest) = return . Just $ Set.insert c rest
 
-  checkBoth :: State Grid (HashSet (Position, Kind), Bool) -> State Grid (HashSet (Position, Kind), Bool) -> State Grid (HashSet (Position, Kind), Bool)
+  checkBoth :: State Grid (Maybe (HashSet (Position, Kind))) -> State Grid (Maybe (HashSet (Position, Kind))) -> State Grid (Maybe (HashSet (Position, Kind)))
   checkBoth = liftM2 go
    where
-    go :: (HashSet (Position, Kind), Bool) -> (HashSet (Position, Kind), Bool) -> (HashSet (Position, Kind), Bool)
-    go (_, False) _ = (Set.empty, False)
-    go _ (_, False) = (Set.empty, False)
-    go (l, True) (r, True) = (l `Set.union` r, True)
+    go :: Maybe (HashSet (Position, Kind)) -> Maybe (HashSet (Position, Kind)) -> Maybe (HashSet (Position, Kind))
+    go Nothing _ = Nothing
+    go _ Nothing = Nothing
+    go (Just l) (Just r) = Just (l `Set.union` r)
 
 robotPosition :: Entities -> Position
 robotPosition = Map.toList >>> filter (snd >>> (== Robot)) >>> head >>> fst
